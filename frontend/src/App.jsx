@@ -1,18 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-
-interface ResearchResult {
-  company: string;
-  verdict: "INVEST" | "PASS";
-  confidence: number;
-  reasoning: string;
-  newsAnalysis: string;
-  financialAnalysis: string;
-  competitorAnalysis: string;
-}
-
-type AnalysisKey = "news" | "financial" | "competitor";
+import axios from "axios";
 
 const SEARCH_HISTORY_KEY = "ai-investment-research-history";
 
@@ -21,15 +8,9 @@ const LOADING_STEPS = [
   "Analyzing financials...",
   "Scanning competitors...",
   "Generating verdict...",
-] as const;
+];
 
-const ANALYSIS_CARDS: Array<{
-  key: AnalysisKey;
-  title: string;
-  accentClass: string;
-  dotClass: string;
-  contentKey: keyof Pick<ResearchResult, "newsAnalysis" | "financialAnalysis" | "competitorAnalysis">;
-}> = [
+const ANALYSIS_CARDS = [
   {
     key: "news",
     title: "News Analysis",
@@ -53,22 +34,23 @@ const ANALYSIS_CARDS: Array<{
   },
 ];
 
-const INITIAL_ANALYSIS_OPEN: Record<AnalysisKey, boolean> = {
+const INITIAL_ANALYSIS_OPEN = {
   news: false,
   financial: false,
   competitor: false,
 };
 
-export default function Home() {
+export default function App() {
   const [company, setCompany] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ResearchResult | null>(null);
+  const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [searchHistory, setSearchHistory] = useState([]);
   const [loadingStage, setLoadingStage] = useState(0);
   const [researchCompletedAt, setResearchCompletedAt] = useState("");
   const [confidenceProgress, setConfidenceProgress] = useState(0);
-  const [analysisOpen, setAnalysisOpen] = useState<Record<AnalysisKey, boolean>>(INITIAL_ANALYSIS_OPEN);
+  const [analysisOpen, setAnalysisOpen] = useState(INITIAL_ANALYSIS_OPEN);
+  const [retryMessage, setRetryMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -117,7 +99,7 @@ export default function Home() {
     return () => window.cancelAnimationFrame(frame);
   }, [result]);
 
-  function saveSearchToHistory(searchTerm: string) {
+  function saveSearchToHistory(searchTerm) {
     setSearchHistory((currentHistory) => {
       const normalizedTerm = searchTerm.trim();
       if (!normalizedTerm) return currentHistory;
@@ -143,21 +125,40 @@ export default function Home() {
     setResearchCompletedAt("");
     setConfidenceProgress(0);
     setAnalysisOpen(INITIAL_ANALYSIS_OPEN);
+    setRetryMessage("");
 
-    try {
-      const res = await fetch("/api/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: trimmedCompany }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
-      setResearchCompletedAt(new Date().toLocaleString());
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt <= maxRetries) {
+      try {
+        if (attempt > 0) {
+          setRetryMessage(`Backend is starting up... Retrying (Attempt ${attempt}/${maxRetries})`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        const res = await axios.post("/api/research", { company: trimmedCompany });
+        setResult(res.data);
+        setResearchCompletedAt(new Date().toLocaleString());
+        setRetryMessage("");
+        setLoading(false);
+        return;
+      } catch (err) {
+        attempt++;
+        const isStartupError =
+          !err.response ||
+          err.response.status === 502 ||
+          err.response.status === 504 ||
+          err.code === "ERR_NETWORK";
+
+        if (isStartupError && attempt <= maxRetries) {
+          continue;
+        }
+
+        setError(err.response?.data?.error || err.message || "Something went wrong");
+        setRetryMessage("");
+        setLoading(false);
+        return;
+      }
     }
   }
 
@@ -239,7 +240,9 @@ export default function Home() {
                   <p className="text-sm font-medium uppercase tracking-[0.2em] text-gray-500">
                     Live research
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-white">Running 3 research agents in parallel</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {retryMessage || "Running 3 research agents in parallel"}
+                  </p>
                 </div>
                 <div className="h-3 w-3 rounded-full bg-sky-400 shadow-[0_0_18px_rgba(56,189,248,0.65)] animate-pulse" />
               </div>
@@ -406,19 +409,6 @@ export default function Home() {
         <footer className="mt-4 pb-2 text-center text-xs text-gray-500">
           Powered by LangGraph + Gemini · Built for InsideIIM Assignment
         </footer>
-
-        <style jsx>{`
-          @keyframes resultEnter {
-            from {
-              opacity: 0;
-              transform: translateY(10px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}</style>
       </div>
     </main>
   );

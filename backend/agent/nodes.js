@@ -1,31 +1,7 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { AgentStateType } from "./state";
-import { fetchNewsHeadlines, fetchFinancialData, fetchCompetitorData } from "./tools";
+const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
+const { fetchNewsHeadlines, fetchFinancialData, fetchCompetitorData } = require("./tools");
 
-console.log("GEMINI_API_KEY:", process.env.GEMINI_API_KEY);
-
-let llm: ChatGoogleGenerativeAI | null = null;
-
-function readKeyFromEnvFile(name: string) {
-  const envPath = join(process.cwd(), ".env.local");
-
-  if (!existsSync(envPath)) {
-    return undefined;
-  }
-
-  const contents = readFileSync(envPath, "utf8");
-  const line = contents
-    .split(/\r?\n/)
-    .find((entry) => entry.startsWith(`${name}=`));
-
-  if (!line) {
-    return undefined;
-  }
-
-  return line.slice(name.length + 1).replace(/^['\"]|['\"]$/g, "");
-}
+let llm = null;
 
 function getLLM() {
   if (!llm) {
@@ -38,19 +14,15 @@ function getLLM() {
   return llm;
 }
 
-async function invokeWithRetry(
-  llm: ChatGoogleGenerativeAI,
-  messages: any,
-  options?: any
-): Promise<any> {
+async function invokeWithRetry(llm, messages, options) {
   const maxAttempts = 5;
   let attempt = 0;
-  let delay = 1000; // start with 1 second delay
+  let delay = 1000;
 
   while (true) {
     try {
       return await llm.invoke(messages, options);
-    } catch (error: any) {
+    } catch (error) {
       attempt++;
       const errorStr = String(error);
       const is429 =
@@ -62,9 +34,9 @@ async function invokeWithRetry(
         (error?.message && (error.message.includes("429") || error.message.includes("RESOURCE_EXHAUSTED")));
 
       if (is429 && attempt < maxAttempts) {
-        console.warn(`[Retry] Attempt ${attempt} failed with 429 (Too Many Requests). Retrying in ${delay}ms... Error:`, error?.message || errorStr);
+        console.warn(`[Retry] Attempt ${attempt} failed with 429 (Too Many Requests). Retrying in ${delay}ms...`, error?.message || errorStr);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2; // exponential backoff
+        delay *= 2;
         continue;
       }
       throw error;
@@ -72,7 +44,7 @@ async function invokeWithRetry(
   }
 }
 
-export async function newsNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
+async function newsNode(state) {
   const llm = getLLM();
 
   try {
@@ -90,14 +62,14 @@ Provide a 3-4 sentence analysis.`
       }
     ]);
 
-    return { newsAnalysis: response.content as string };
+    return { newsAnalysis: response.content };
   } catch (error) {
     console.error("newsNode error:", error);
     return { newsAnalysis: "Unable to analyze news at this time." };
   }
 }
 
-export async function financialNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
+async function financialNode(state) {
   const llm = getLLM();
 
   try {
@@ -115,14 +87,14 @@ Provide a 3-4 sentence financial assessment.`
       }
     ]);
 
-    return { financialAnalysis: response.content as string };
+    return { financialAnalysis: response.content };
   } catch (error) {
     console.error("financialNode error:", error);
     return { financialAnalysis: "Unable to analyze financial data at this time." };
   }
 }
 
-export async function competitorNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
+async function competitorNode(state) {
   const llm = getLLM();
 
   try {
@@ -140,14 +112,14 @@ Provide a 3-4 sentence competitive analysis.`
       }
     ]);
 
-    return { competitorAnalysis: response.content as string };
+    return { competitorAnalysis: response.content };
   } catch (error) {
     console.error("competitorNode error:", error);
     return { competitorAnalysis: "Unable to analyze competitors at this time." };
   }
 }
 
-export async function verdictNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
+async function verdictNode(state) {
   try {
     const llm = getLLM();
     const response = await invokeWithRetry(llm, [
@@ -173,7 +145,7 @@ Respond in this exact JSON format:
       }
     ]);
 
-    const text = response.content as string;
+    const text = response.content;
     const json = JSON.parse(text.replace(/```json|```/g, "").trim());
     return {
       verdict: json.verdict,
@@ -189,3 +161,5 @@ Respond in this exact JSON format:
     };
   }
 }
+
+module.exports = { newsNode, financialNode, competitorNode, verdictNode };

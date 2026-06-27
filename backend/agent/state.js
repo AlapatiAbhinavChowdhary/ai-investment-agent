@@ -1,34 +1,34 @@
-import { Annotation } from "@langchain/langgraph";
+const { Annotation } = require("@langchain/langgraph");
 
-export const AgentState = Annotation.Root({
-  company: Annotation<string>({
+const AgentState = Annotation.Root({
+  company: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
-  newsAnalysis: Annotation<string>({
+  newsAnalysis: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
-  financialAnalysis: Annotation<string>({
+  financialAnalysis: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
-  competitorAnalysis: Annotation<string>({
+  competitorAnalysis: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
-  verdict: Annotation<string>({
+  verdict: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
-  confidence: Annotation<number>({
+  confidence: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => 0,
   }),
-  reasoning: Annotation<string>({
+  reasoning: Annotation({
     reducer: (a, b) => b ?? a,
     default: () => "",
   }),
 });
 
-export type AgentStateType = typeof AgentState.State;
+module.exports = { AgentState };

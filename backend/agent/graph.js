@@ -1,8 +1,8 @@
-import { StateGraph } from "@langchain/langgraph";
-import { AgentState } from "./state";
-import { newsNode, financialNode, competitorNode, verdictNode } from "./nodes";
+const { StateGraph } = require("@langchain/langgraph");
+const { AgentState } = require("./state");
+const { newsNode, financialNode, competitorNode, verdictNode } = require("./nodes");
 
-export async function runResearchAgent(company: string) {
+async function runResearchAgent(company) {
   const graph = new StateGraph(AgentState)
     .addNode("news", newsNode)
     .addNode("financial", financialNode)
@@ -27,3 +27,5 @@ export async function runResearchAgent(company: string) {
 
   return result;
 }
+
+module.exports = { runResearchAgent };
